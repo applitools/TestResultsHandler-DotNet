@@ -6,7 +6,7 @@ using System.Net;
 using System.IO;
 using System.Net.Http;
 using System.Threading;
-using System.Collections.Generic;
+using System.Linq;
 
 namespace ApplitoolsTestResultsHandler
 {
@@ -167,20 +167,14 @@ namespace ApplitoolsTestResultsHandler
         private HttpResponseMessage runLongRequest(string URL)
         {
             var request = new HttpRequestMessage(HttpMethod.Get, URL);
-            var requestGet = createHttpRequest(request);
 
-            HttpResponseMessage response = sendRequest(requestGet, 1, false);
+            HttpResponseMessage response = sendRequest(request, 1, false);
 
             return longRequestCheckStatus(response);
         }
 
         private HttpResponseMessage sendRequest(HttpRequestMessage request, int retry, Boolean delayBeforeRetry)
         {
-            counter += 1;
-            string requestId = counter + "--" + System.Guid.NewGuid().ToString("B").ToUpper();
-
-            request.Headers.Add("x-applitools-eyes-client-request-id", requestId);
-
             HttpClient client = new HttpClient();
 
             try
@@ -219,16 +213,16 @@ namespace ApplitoolsTestResultsHandler
                     return responseReceived;
 
                 case HttpStatusCode.Accepted:
-                    List<string> locationList1 = (List<string>)responseReceived.Headers.GetValues("Location");
-                    URI = locationList1[0] + "?apiKey=" + this.ViewKey;
+                    var location = responseReceived.Headers.GetValues("Location");
+                    URI = location.First() + "?apiKey=" + this.ViewKey;
+
                     request = new HttpRequestMessage(HttpMethod.Get, URI);
-                    request = createHttpRequest(request);
                     HttpResponseMessage response = longRequestLoop(request, LONG_REQUEST_DELAY_MS);
                     return longRequestCheckStatus(response);
 
                 case HttpStatusCode.Created:
-                    List<string> locationList2 = (List<string>)responseReceived.Headers.GetValues("Location");
-                    URI = locationList2[0] + "?apiKey=" + this.ViewKey;
+                    var location2 = responseReceived.Headers.GetValues("Location");
+                    URI = location2.First() + "?apiKey=" + this.ViewKey;
                     request = new HttpRequestMessage(HttpMethod.Delete, URI);
                     return sendRequest(request, 1, false);
 
@@ -261,11 +255,11 @@ namespace ApplitoolsTestResultsHandler
             Thread.Sleep(delay);
 
             HttpResponseMessage response = sendRequest(request, 1, false);
-            if (response.StatusCode != HttpStatusCode.OK)
+            if (response.StatusCode == HttpStatusCode.OK)
             {
-                return response;
+                return longRequestLoop(request, delay);
             }
-            return longRequestLoop(request, delay);
+            return response;
         }
 
         /**
